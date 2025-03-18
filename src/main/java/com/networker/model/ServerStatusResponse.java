@@ -9,7 +9,13 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ServerStatusResponse extends ApiResponse {
+public class ServerStatusResponse {
     private boolean running;
     private int port;
+    private String message;
+    
+    public ServerStatusResponse(boolean running, int port) {
+        this.running = running;
+        this.port = port;
+    }
 }

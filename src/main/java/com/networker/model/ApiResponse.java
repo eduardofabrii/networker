@@ -10,16 +10,14 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ApiResponse {
-    private boolean success = true; // Default value set to true
+    private boolean success;
     private String message;
     
-    // Constructor para erros
-    public static ApiResponse error(String message) {
-        return new ApiResponse(false, message);
-    }
-    
-    // Construtor para sucesso
     public static ApiResponse success(String message) {
         return new ApiResponse(true, message);
+    }
+    
+    public static ApiResponse error(String message) {
+        return new ApiResponse(false, message);
     }
 }

@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class MessageResponse extends ApiResponse {
-    private String message;  // A mensagem que você enviou
-    private String serverResponse;  // A resposta do servidor
+public class MessageResponse {
+    private String message;
+    private String response;
 }
