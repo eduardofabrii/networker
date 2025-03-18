@@ -23,13 +23,21 @@ public class WebSocketService {
     }
 
     public void notifyTcpConnection(String clientAddress) {
-        WebSocketMessage message = new WebSocketMessage(
+        String message;
+        if (clientAddress.contains("WebSocket")) {
+            message = "Novo cliente conectado através do WebSocket: " + 
+                clientAddress.replace(" (WebSocket)", "");
+        } else {
+            message = "Novo cliente conectado: " + clientAddress;
+        }
+        
+        WebSocketMessage webSocketMessage = new WebSocketMessage(
                 "System", 
-                "New TCP client connected: " + clientAddress,
+                message,
                 new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()),
                 "NOTIFICATION"
         );
-        messagingTemplate.convertAndSend("/topic/notifications", message);
+        messagingTemplate.convertAndSend("/topic/notifications", webSocketMessage);
     }
 
     public void notifyTcpMessage(String clientAddress, String receivedMessage) {
@@ -61,5 +69,24 @@ public class WebSocketService {
                 "BROADCAST"
         );
         messagingTemplate.convertAndSend("/topic/broadcast-messages", message);
+    }
+
+    public void notifyUserListUpdated(String[] users) {
+        WebSocketMessage message = new WebSocketMessage(
+                "System",
+                "Users updated",
+                new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()),
+                "USER_LIST"
+        );
+        
+        // Converte a lista de usuários para uma string
+        StringBuilder userList = new StringBuilder();
+        for (String user : users) {
+            if (userList.length() > 0) userList.append(", ");
+            userList.append(user);
+        }
+        
+        message.setContent("Connected users: " + userList.toString());
+        messagingTemplate.convertAndSend("/topic/users", users);
     }
 }
