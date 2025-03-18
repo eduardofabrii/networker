@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -18,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 @Service
 @Getter
 @Setter
+@Slf4j
 public class TcpService {
     
     private ServerSocket serverSocket;
@@ -44,9 +46,13 @@ public class TcpService {
     }
     
     public boolean sendMessageToUser(String sender, String recipient, String message) {
+        log.debug("Attempting to send message from {} to {}. Current users: {}", 
+                 sender, recipient, String.join(", ", connectedClients.keySet()));
+                 
         ClientConnection connection = connectedClients.get(recipient);
         if (connection == null) {
-            return false; // Destinatário não encontrado
+            log.warn("Recipient {} not found in connected clients", recipient);
+            return false;
         }
         
         try {
@@ -55,9 +61,10 @@ public class TcpService {
             
             // Notifica via WebSocket
             webSocketService.notifyPrivateMessage(sender, recipient, message);
+            log.debug("Message sent successfully from {} to {}", sender, recipient);
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error sending message from {} to {}", sender, recipient, e);
             return false;
         }
     }
@@ -111,13 +118,15 @@ public class TcpService {
     
     private void handleClient(Socket clientSocket) {
         try {
-            System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
+            log.info("Client connected: {}", clientSocket.getInetAddress());
             
             BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             PrintWriter writer = new PrintWriter(clientSocket.getOutputStream(), true);
             
             // Autenticação: primeira mensagem deve ser "LOGIN:username"
             String loginMessage = reader.readLine();
+            log.debug("Received login message: {}", loginMessage);
+            
             if (loginMessage == null || !loginMessage.startsWith("LOGIN:")) {
                 writer.println("ERRO: Login necessário. Formato: LOGIN:username");
                 clientSocket.close();
@@ -125,7 +134,15 @@ public class TcpService {
             }
             
             String username = loginMessage.substring(6).trim();
+            if (username.isEmpty()) {
+                writer.println("ERRO: Username não pode ser vazio");
+                clientSocket.close();
+                return;
+            }
+            
+            // Check for duplicate username
             if (connectedClients.containsKey(username)) {
+                log.warn("Login attempt with duplicate username: {}", username);
                 writer.println("ERRO: Nome de usuário já em uso");
                 clientSocket.close();
                 return;
@@ -135,16 +152,15 @@ public class TcpService {
             ClientConnection connection = new ClientConnection(clientSocket, reader, writer);
             connectedClients.put(username, connection);
             
+            log.info("User {} connected successfully. Total connected: {}", 
+                    username, connectedClients.size());
+                    
             writer.println("SUCESSO: Logado como " + username);
-            webSocketService.notifyTcpConnection(username + " (" + clientSocket.getInetAddress() + ")");
             
             // Lista de usuários online
             StringBuilder userList = new StringBuilder("USUARIOS_ONLINE:");
             connectedClients.keySet().forEach(user -> userList.append(" ").append(user));
             writer.println(userList.toString());
-            
-            // Enviar mensagem para todos sobre o novo usuário
-            broadcastMessage("SISTEMA", username + " entrou no chat");
             
             // Loop para receber mensagens do cliente
             String receivedMessage;
@@ -184,13 +200,12 @@ public class TcpService {
                 webSocketService.notifyTcpMessage(username, receivedMessage);
             }
             
-            // Quando o cliente sai, removê-lo da lista e notificar os outros
+            // Quando o cliente sai, removê-lo da lista sem notificar os outros
             connectedClients.remove(username);
-            broadcastMessage("SISTEMA", username + " saiu do chat");
             
             clientSocket.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error handling client connection", e);
         }
     }
     
@@ -222,7 +237,74 @@ public class TcpService {
         }
     }
     
+    public void broadcastUserList() {
+        log.debug("Broadcasting user list to WebSocket clients");
+        String[] users = getConnectedUsernames();
+        
+        // Log mais detalhado para diagnóstico
+        if (users.length > 0) {
+            log.info("Broadcasting user list: {}", String.join(", ", users));
+        } else {
+            log.warn("Broadcasting empty user list");
+        }
+        
+        webSocketService.notifyUserListUpdated(users);
+    }
+
+    // Melhorando o método getConnectedUsernames para garantir que não haja valores nulos
     public String[] getConnectedUsernames() {
-        return connectedClients.keySet().toArray(new String[0]);
+        log.debug("Getting connected usernames. Count: {}", connectedClients.size());
+        
+        // Verificar se há usuários conectados e log detalhado
+        if (connectedClients.isEmpty()) {
+            // Não vamos mais adicionar usuários de teste
+            log.warn("Nenhum cliente conectado");
+            return new String[0];
+        }
+        
+        String[] usernames = connectedClients.keySet().toArray(new String[0]);
+        
+        if (usernames.length > 0) {
+            log.debug("Returning usernames: {}", String.join(", ", usernames));
+        } else {
+            log.warn("Connected clients map is not empty but no usernames were extracted");
+        }
+        
+        return usernames;
+    }
+
+    // Adicionar método para registrar usuários de WebSocket
+    public void registerWebSocketUser(String username) {
+        if (username == null || username.trim().isEmpty()) {
+            log.warn("Tentativa de registrar usuário WebSocket com nome vazio");
+            return;
+        }
+        
+        log.info("Registrando usuário WebSocket: {}", username);
+        
+        // Verificar se o usuário já existe
+        if (connectedClients.containsKey(username)) {
+            log.warn("Nome de usuário já em uso: {}", username);
+            return;
+        }
+        
+        // Para usuários WebSocket, criamos uma conexão especial sem socket
+        ClientConnection webSocketConnection = new ClientConnection(null, null, null);
+        connectedClients.put(username, webSocketConnection);
+        
+        // Atualizar lista de usuários sem enviar mensagem
+        broadcastUserList();
+        
+        log.info("Usuário WebSocket registrado: {}. Total de usuários: {}", 
+                 username, connectedClients.size());
+    }
+
+    // Método para remover usuário WebSocket
+    public void removeWebSocketUser(String username) {
+        if (username != null && connectedClients.containsKey(username)) {
+            log.info("Removendo usuário WebSocket: {}", username);
+            connectedClients.remove(username);
+            broadcastUserList();
+        }
     }
 }
