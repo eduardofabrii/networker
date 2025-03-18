@@ -30,9 +30,30 @@
 		<java.version>21</java.version>
 	</properties>
 	<dependencies>
+	 	<!-- Dependência do Spring Boot Starter para trabalhar com beans e injeção de dependência -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter</artifactId>
+		</dependency>
+
+		<!-- Spring Boot Starter Web para suportar REST APIs -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- Dependência para serialização e desserialização de JSON -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+
+		<!-- Dependência do Lombok para evitar boilerplate de código -->
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<version>1.18.24</version> <!-- Verifique se esta é a versão mais recente -->
+			<scope>provided</scope>
 		</dependency>
 
 		<dependency>
